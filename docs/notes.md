@@ -66,3 +66,39 @@ Write one sentence each time something goes wrong, for example "Table row cut ac
 
 - The tables being cut in between chunks, the row and col lables getting seperated from the values are part of the reasons causing the model to answer incorrectly, this also depends on how the pdf is being read - tables fail when the text is flattened, for 3M this happend and for AMD the table lables were retained so it answered correctly.
 - Using same wording as in the filing leads to more accurate chunks being fetched and correct answers.
+
+## Eval harness (Phase B)
+
+A **harness** is the scaffolding around the thing under test. It feeds each question to the RAG system, collects the outputs, scores them against the gold answers, and logs the result with the settings used. The RAG system is what is tested; the harness is the machinery that tests it the same way every time.
+
+In my own words:
+
+## Dev set, held-out set, and why
+
+- No model is trained here. We tune **settings** (chunk size, k, prompt). If we pick settings by looking at one question set's score, that score becomes optimistic (overfitting).
+- So the 150 questions are split once, with a fixed seed: **dev** (100, used while experimenting), **held-out** (50, looked at only at the end of a phase), and a **quick** subset (30 of the dev questions, for fast checks). The split is saved in `data/eval/split.json` and never regenerated.
+- The split is **stratified**: each `question_type` is split separately so both parts get a mix. The ids are **sorted before the shuffle**, so the same seed gives the same split whatever order the file has.
+- Small sets are noisy. On 50 questions one question is 2 points, and a gain under about 15 points could be luck. On 100 questions, about 10.
+
+In my own words:
+
+## Retrieval metrics
+
+- **hit rate (any):** at least one gold page is in the top 5. **full recall (all):** every gold page is. **mean fraction:** gold pages found divided by gold pages.
+- **Reciprocal rank (rr):** 1 divided by the rank of the first correct chunk (1, 0.5, 0.33 ...; 0 if absent). **MRR** is the average of rr over all questions. It rewards putting the right page near the top, which hit rate cannot see.
+- Compare `page_index` (0-based) to `evidence_page_num`. Gold pages are a set because some questions list a page twice.
+
+In my own words:
+
+## LLM judge and calibration (planned)
+
+- The **judge** is a second LLM call that grades the first: it sees the question, gold answer and model answer (and the retrieved chunks, for faithfulness).
+- **Calibration** does not train it. I grade about 12 answers by hand, the judge grades the same ones, and we measure agreement. Low agreement means fixing the judge prompt before trusting its numbers.
+
+In my own words:
+
+## Failure notes: first retrieval baseline
+
+- Baseline (known filing, top 5, dev set of 100): hit rate 0.57, full recall 0.46, MRR 0.40. By type: metrics-generated 0.76, novel-generated 0.56, domain-relevant 0.39.
+- In the 11 misses on the quick set, the gold page was usually a financial statement table, and the question used a concept ("working capital", "quick ratio") that the table never states in those words. Hypothesis, not yet tested; Phase C is where it gets tested.
+- Multi-page questions: hit rate (any) 0.70 but full recall only 0.15.

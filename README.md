@@ -101,7 +101,15 @@ In my own words (fill in):
 
 ### Phase B: Eval harness (days 4-5)
 
-*Not started.*
+*In progress.* Done: question split (100 dev / 50 held-out / 30 quick, fixed seed), retrieval metrics (hit rate, full recall, mean fraction, MRR), corpus prep for the 64 dev filings, batch runner with config logging, hand-grading sheet. Left: LLM judge, calibration against hand grades, full dev run with answers, held-out run, report script.
+
+Retrieval baseline, dev set (100 questions), search inside the known filing, top 5, chunks of 1,000 characters with 200 overlap, bge-small-en-v1.5:
+
+| hit rate (any) | full recall (all) | mean fraction | MRR |
+| --- | --- | --- | --- |
+| 0.57 | 0.46 | 0.52 | 0.40 |
+
+Domain-relevant questions are weakest (hit 0.39); metrics-generated are best (0.76). Answer accuracy and faithfulness are not measured yet.
 
 ### Phase C: Retrieval upgrades (days 6-12)
 
