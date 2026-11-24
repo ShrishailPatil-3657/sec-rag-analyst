@@ -1,13 +1,13 @@
 id,correct,supported,note
-financebench_id_10285,,,
-financebench_id_07507,,,
-financebench_id_01319,,,
-financebench_id_04103,,,
-financebench_id_00882,,,
-financebench_id_01981,,,
-financebench_id_01964,,,
-financebench_id_03069,,,
-financebench_id_01148,,,
-financebench_id_01328,,,
-financebench_id_00070,,,
-financebench_id_00724,,,
+financebench_id_10285,y,y,"correct page number was fetched, i think it worked because the wording was exactly like in the pdf. even though the chunk had numbers and was a table still the value structure was retained."
+financebench_id_07507,y,y,"correct page and chunk was fetched and the cause is likely using the table's own words."
+financebench_id_01319,n,n,"did not fetch the correct page"
+financebench_id_04103,n,n,"balance sheet retrieved, income statement (page 53) missed; model abstained"
+financebench_id_00882,n,y,"needed to give the sum of the amount which is the llm problem, retriver workded well"
+financebench_id_01981,y,n,"right answer, but the pages given don't show retention; 76.7M cards is not evidence, this is just a fluke"
+financebench_id_01964,n,n,"balance sheet (page 98) not retrieved; model picked the largest liability among what it could see"
+financebench_id_03069,n,n,"model said not_found; gold pages (page 56 and 60 in sheet labels) not retrieved; no D&A figure in any of the 5 chunks; reasonable abstention"
+financebench_id_01148,y,y,"Amcor packaging industry; pages 5, 30 and 55 all state it; cited pages are in the pages given"
+financebench_id_01328,y,y,"$411M is stated on page 78; it is the total restructuring and impairment charges from a note, not the income statement page, but matches gold"
+financebench_id_00070,n,n,"model said not_found; chunks have liabilities side only, no current assets or total current liabilities; reasonable abstention, working capital not computable. fetching the golden page is not enough we also have to fetch the correct chunk from it."
+financebench_id_00724,n,n,"answered International -81%, but that is the Comirnaty product Int'l row (page 47), not a geographic revenue region; the regional table was not retrieved; gold is Developed Rest of World"

@@ -1,0 +1,6 @@
+id,correct,supported,note,grader
+financebench_id_03069,n,n,model said not_found; gold pages (page 56 and 60 in sheet labels) not retrieved; no D&A figure in any of the 5 chunks; reasonable abstention,claude
+financebench_id_01148,y,y,"Amcor packaging industry; pages 5, 30 and 55 all state it; cited pages are in the pages given",claude
+financebench_id_01328,y,y,"$411M is stated on page 78; it is the total restructuring and impairment charges from a note, not the income statement page, but matches gold",claude
+financebench_id_00070,n,n,"model said not_found; chunks have liabilities side only, no current assets or total current liabilities; reasonable abstention, working capital not computable",claude
+financebench_id_00724,n,n,"answered International -81%, but that is the Comirnaty product Int'l row (page 47), not a geographic revenue region; the regional table was not retrieved; gold is Developed Rest of World",claude
