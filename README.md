@@ -4,11 +4,11 @@ A system that answers questions about SEC filings and cites the page, plus a tes
 
 ## Results table
 
-Filled in one row at a time, one change per row. Nothing is measured yet. The Phase A hand checks below are a small sample and are not a baseline number.
+Filled in one row at a time, one change per row. Numbers are on the 50 held-out questions (run once, never tuned on). Dev numbers (100 questions) are in the Phase B notes. Accuracy and faithfulness come from a local LLM judge (qwen3:8b) that agreed with my hand grades on 10 of 10 unseen answers. That sample is small, and the judge has known errors of a few points in both directions (see Phase B).
 
 | Technique | Config | Hit@5 | Accuracy | Faithfulness | What failed |
 | --- | --- | --- | --- | --- | --- |
-| Baseline | fixed chunks, dense top-5, local 8B | | | | |
+| Baseline | fixed 1,000-char chunks, bge-small dense top-5, qwen3:8b | 0.56 | 30% (38% wrong, 32% not found) | 34% | Gold page missed on 38% of questions. Right page but wrong or incomplete answer on 22%: numbers for ratios sit in a different chunk, wrong column or units. |
 
 ## Phase notes
 
@@ -97,19 +97,68 @@ In my own words (fill in):
 - Why the model answered instead of saying "not found":
   In the 3M questions, the chunks it received looked like they contained the answer. In one, a bare number sat right under the words "capital spending", so the model took it as the answer. The "not found" rule is only an instruction in the prompt. Nothing checks the answer against the text afterwards, and the model cannot know that the right number was in a chunk it never received. When the retrieved text is clearly unrelated, as in the AMD quick ratio question, the model did say "not found". It guesses when the text is close to the topic but not the answer.
 
-**Next:** Phase B (eval harness). Fixed 20-question baseline, then a script for all 150 questions.
-
 ### Phase B: Eval harness (days 4-5)
 
-*In progress.* Done: question split (100 dev / 50 held-out / 30 quick, fixed seed), retrieval metrics (hit rate, full recall, mean fraction, MRR), corpus prep for the 64 dev filings, batch runner with config logging, hand-grading sheet. Left: LLM judge, calibration against hand grades, full dev run with answers, held-out run, report script.
+**What I built**
 
-Retrieval baseline, dev set (100 questions), search inside the known filing, top 5, chunks of 1,000 characters with 200 overlap, bge-small-en-v1.5:
+1. A fixed split of the 150 questions with a set seed: 100 dev (for debugging and error analysis), 50 held-out (run once for the headline numbers), plus a 30-question quick set.
+2. Retrieval metrics per question: hit rate (any gold page in the top 5), full recall (all gold pages), mean fraction of gold pages found, and MRR (how high the first gold page ranks). All compare `page_index`.
+3. A batch runner (`scripts/run_eval.py`) that runs a split end to end, logs the config (models, chunking, git commit) and saves the retrieved chunks with each answer. It can resume after an interruption.
+4. An LLM judge (`src/sec_rag_analyst/judge.py`, local qwen3:8b, temperature 0). It gives each answer a verdict (`correct`, `incorrect`, `not_found`) and a `supported` flag (do the retrieved pages contain what is needed to derive the gold answer, which is the faithfulness score). `not_found` is decided by code, not by the model.
+5. `scripts/report.py`: rates by question type and a failure-type breakdown for any judged run.
 
-| hit rate (any) | full recall (all) | mean fraction | MRR |
-| --- | --- | --- | --- |
-| 0.57 | 0.46 | 0.52 | 0.40 |
+**How I checked the judge**
 
-Domain-relevant questions are weakest (hit 0.39); metrics-generated are best (0.76). Answer accuracy and faithfulness are not measured yet.
+- On my first 12 hand grades it agreed on `correct` 12/12 and on `supported` 10/12. The prompt was changed twice while looking at those same items, so that is optimistic.
+- On 10 dev answers it had never seen (4 judged correct, 4 incorrect, 2 not found, verdicts hidden while I graded), it agreed on `correct` 10/10 and `supported` 10/10. One item I first graded "partially supported" (a table cut off at the last line, 90% there) and then counted as supported.
+- Ten items is a small sample. Read this as "no disagreements found", not "100% accurate".
+
+**Results**
+
+| Run | Questions | Hit rate | Full recall | MRR | Correct | Incorrect | Not found | Supported |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| dev | 100 | 0.57 | 0.46 | 0.40 | 32% | 36% | 32% | 33% |
+| held-out | 50 | 0.56 | 0.52 | 0.42 | 30% | 38% | 32% | 34% |
+
+The held-out numbers match the dev numbers, so the dev set was not flattering the baseline (with 50 questions, one question is 2 points).
+
+By question type (accuracy, dev / held-out): domain-relevant 33% / 18%, metrics-generated 24% / 35%, novel-generated 38% / 38%. Metrics-generated questions have the most wrong answers on dev (48% incorrect). Domain-relevant questions have the most abstentions and the lowest retrieval hit rate (0.39 on dev).
+
+Failure types (dev / held-out): gold page missed 38 / 19, correct 27 / 12, right page but wrong answer 23 / 11, right page but the model abstained 7 / 5, correct without the gold page 5 / 3.
+
+When the gold page was retrieved, the answer was correct 47% of the time on dev (27 of 57 questions). When it was missed, it was correct 12% of the time (5 of 43), and 25 of those 43 were abstentions, which is the behaviour I want.
+
+**What failed and why**
+
+- **Retrieval is the biggest problem.** The gold page was missed for about 4 questions in 10. Reasons seen: acronyms that the filing never uses ("PPNE" for property, plant and equipment, net), and numbers-heavy statement pages that embed weakly.
+- **A page hit is not a chunk hit.** Roughly 13 of the 23 dev questions with the right page and a wrong answer were ratio questions where the page was retrieved but the chunk holding a needed number (COGS, capex, dividends) was not.
+- **Wrong column or units.** Block FY2020: the model read $2,131,050 thousand as millions.
+- **Incomplete answers.** PepsiCo: gave $4.2B per facility instead of the $8.4B total.
+- **Ranking.** In several hand-graded items the answer chunk was in the top 5 but ranked last.
+- **The model abstains in its own words**, not the exact phrase "not found" (see judge limits).
+
+**Judge limits (known, not fixed yet)**
+
+- `not_found` is detected by an exact phrase. When the model abstains in other words, the answer is judged on content. On dev one such abstention was marked `correct` (Amcor gross margin) and 4 were marked `incorrect`; on held-out 2 were marked `incorrect`. This overstates `correct` by at least 1 point and understates `not_found` by a few.
+- The judge was too strict in two cases that break my own unit and rounding rules: Netflix 5,466,312 thousand against a gold of $5,466M, and Coca-Cola 0.0146 against a gold of 0.01. These push `correct` down.
+- Net effect on the accuracy figures is a few points, direction unknown. Plan: fix the abstention check and the unit and rounding rules at the start of Phase C, then re-judge the baseline once, so every row in the results table uses the same judge.
+- 5 dev and 3 held-out answers were correct without the gold page (`ok_without_gold_page`). From the judge's reasons on the dev ones, four seem to come from another page with the same figures (not yet checked by hand), and one was a judge error (above). I report accuracy as is and keep them as a separate label. Stricter accuracy (correct and gold page retrieved) is 27% on dev.
+
+**What I learned**
+
+- Hit rate, accuracy and faithfulness measure different things, and a result needs all three. Retrieval hit is 0.57 but accuracy is 32%, and faithfulness is only 33%.
+- A held-out set is only honest if it is run once. I did not change anything after seeing it.
+- A judge is a model too and needs its own check against human grades.
+- Page numbers come in four forms (see `docs/notes.md`). Only `page_index` is used for comparison.
+
+**Next:** Phase C (retrieval upgrades), one change at a time, starting with metadata filtering and a re-judge of the baseline with the fixed judge rules. The reranker (cross-encoder) targets the "answer chunk ranked last" cases.
+
+In my own words (fill in):
+
+- What the three scores (hit rate, accuracy, faithfulness) each tell me, and why I need all three:
+- Why the held-out set is run only once:
+- What I trust and do not trust about the judge, and why:
+- What the failure types say about where to improve first:
 
 ### Phase C: Retrieval upgrades (days 6-12)
 
