@@ -30,3 +30,15 @@ def test_is_not_found():
     assert is_not_found("The excerpts do not contain the answer. not found (page 82)")
     assert not is_not_found("Revenue was $5 million. " * 20 + "The risk was not found to be material.")
     assert not is_not_found("Yes, American Express retained card members.")
+
+
+def test_is_not_found_other_words():
+    from sec_rag_analyst.judge import is_not_found
+
+    # real abstentions seen in the dev and held-out runs
+    assert is_not_found("The quick ratio is not provided in the excerpts, and there is no direct information about liquidity. Therefore, it is not possible to assess the liquidity profile using the quick ratio. (page 62)")
+    assert is_not_found("To calculate FCF we need capex. The cash from operations is $2,210.8 million. However, the excerpts do not provide the amount for capex. Therefore, the answer is not found. (page 52)")
+    assert is_not_found("The excerpts do not provide information about gross margin. Therefore, it is not possible to determine if the margin is improving. Additionally, the excerpts mention taxes, but not gross margin. (page 32)")
+    # real answers that mention something missing, but do answer
+    assert not is_not_found("Operating cash flow was $5,000 million. Capex was not provided separately, so the ratio uses the total of $1,200 million. The ratio is 4.2. (page 52)")
+    assert not is_not_found("The exact figure is not stated in the text, but the table shows $1,577 million. (page 53)")

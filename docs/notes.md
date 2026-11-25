@@ -100,7 +100,7 @@ In my own words:
 - **Calibration** does not train it. I grade some answers by hand, the judge grades the same ones, and we count agreement. Low agreement means the judge's numbers cannot be trusted.
 - **Tuned vs unseen:** I changed the judge prompt twice while looking at my first 12 hand grades, so its 12/12 and 10/12 agreement there is optimistic. The fair test is answers it was never tuned on. I graded 10 fresh dev answers with the verdicts hidden (4 judged correct, 4 incorrect, 2 not found) and it agreed on 10/10 for both scores. Ten is a small sample, so the honest claim is "no disagreements found".
 - **Freeze the judge** before the final measurement. If I keep editing it after seeing results, the numbers stop being comparable. Known judge errors are written down and fixed once, then the baseline is re-judged so every row in the results table uses the same judge.
-- Known judge errors so far: abstentions in other words than "not found" are judged by content (one marked correct), and two unit and rounding cases were judged too strictly.
+- Known judge errors so far: abstentions in other words than "not found" were judged by content (fixed in code: the last two sentences are now checked, and the saved verdicts were recomputed without re-running the LLM), and one rounding miss remains (0.0146 against a gold of 0.01). I left the prompt alone because editing it would invalidate the check on unseen answers.
 
 In my own words:
 

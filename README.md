@@ -4,11 +4,11 @@ A system that answers questions about SEC filings and cites the page, plus a tes
 
 ## Results table
 
-Filled in one row at a time, one change per row. Numbers are on the 50 held-out questions (run once, never tuned on). Dev numbers (100 questions) are in the Phase B notes. Accuracy and faithfulness come from a local LLM judge (qwen3:8b) that agreed with my hand grades on 10 of 10 unseen answers. That sample is small, and the judge has known errors of a few points in both directions (see Phase B).
+Filled in one row at a time, one change per row. Numbers are on the 50 held-out questions (run once, never tuned on). Dev numbers (100 questions) are in the Phase B notes. Accuracy and faithfulness come from a local LLM judge (qwen3:8b) that agreed with my hand grades on 10 of 10 unseen answers. That sample is small, and one known judge miss remains (see Phase B).
 
 | Technique | Config | Hit@5 | Accuracy | Faithfulness | What failed |
 | --- | --- | --- | --- | --- | --- |
-| Baseline | fixed 1,000-char chunks, bge-small dense top-5, qwen3:8b | 0.56 | 30% (38% wrong, 32% not found) | 34% | Gold page missed on 38% of questions. Right page but wrong or incomplete answer on 22%: numbers for ratios sit in a different chunk, wrong column or units. |
+| Baseline | fixed 1,000-char chunks, bge-small dense top-5, qwen3:8b | 0.56 | 30% (34% wrong, 36% not found) | 34% | Gold page missed on 38% of questions. Right page but wrong or incomplete answer on 18%: numbers for ratios sit in a different chunk, wrong column or units. |
 
 ## Phase notes
 
@@ -117,32 +117,32 @@ In my own words (fill in):
 
 | Run | Questions | Hit rate | Full recall | MRR | Correct | Incorrect | Not found | Supported |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| dev | 100 | 0.57 | 0.46 | 0.40 | 32% | 36% | 32% | 33% |
-| held-out | 50 | 0.56 | 0.52 | 0.42 | 30% | 38% | 32% | 34% |
+| dev | 100 | 0.57 | 0.46 | 0.40 | 31% | 32% | 37% | 33% |
+| held-out | 50 | 0.56 | 0.52 | 0.42 | 30% | 34% | 36% | 34% |
 
 The held-out numbers match the dev numbers, so the dev set was not flattering the baseline (with 50 questions, one question is 2 points).
 
-By question type (accuracy, dev / held-out): domain-relevant 33% / 18%, metrics-generated 24% / 35%, novel-generated 38% / 38%. Metrics-generated questions have the most wrong answers on dev (48% incorrect). Domain-relevant questions have the most abstentions and the lowest retrieval hit rate (0.39 on dev).
+By question type (accuracy, dev / held-out): domain-relevant 30% / 18%, metrics-generated 24% / 35%, novel-generated 38% / 38%. Metrics-generated questions have the most wrong answers on dev (42% incorrect). Domain-relevant questions have the most abstentions (45% on dev) and the lowest retrieval hit rate (0.39 on dev).
 
-Failure types (dev / held-out): gold page missed 38 / 19, correct 27 / 12, right page but wrong answer 23 / 11, right page but the model abstained 7 / 5, correct without the gold page 5 / 3.
+Failure types (dev / held-out): gold page missed 39 / 19, correct 27 / 12, right page but wrong answer 20 / 9, right page but the model abstained 10 / 7, correct without the gold page 4 / 3.
 
-When the gold page was retrieved, the answer was correct 47% of the time on dev (27 of 57 questions). When it was missed, it was correct 12% of the time (5 of 43), and 25 of those 43 were abstentions, which is the behaviour I want.
+When the gold page was retrieved, the answer was correct 47% of the time on dev (27 of 57 questions). When it was missed, it was correct 9% of the time (4 of 43), and 27 of those 43 were abstentions, which is the behaviour I want.
 
 **What failed and why**
 
 - **Retrieval is the biggest problem.** The gold page was missed for about 4 questions in 10. Reasons seen: acronyms that the filing never uses ("PPNE" for property, plant and equipment, net), and numbers-heavy statement pages that embed weakly.
-- **A page hit is not a chunk hit.** Roughly 13 of the 23 dev questions with the right page and a wrong answer were ratio questions where the page was retrieved but the chunk holding a needed number (COGS, capex, dividends) was not.
+- **A page hit is not a chunk hit.** Roughly 13 of the 20 dev questions with the right page and a wrong answer were ratio questions where the page was retrieved but the chunk holding a needed number (COGS, capex, dividends) was not.
 - **Wrong column or units.** Block FY2020: the model read $2,131,050 thousand as millions.
 - **Incomplete answers.** PepsiCo: gave $4.2B per facility instead of the $8.4B total.
 - **Ranking.** In several hand-graded items the answer chunk was in the top 5 but ranked last.
 - **The model abstains in its own words**, not the exact phrase "not found" (see judge limits).
 
-**Judge limits (known, not fixed yet)**
+**Judge fixes (start of Phase C)**
 
-- `not_found` is detected by an exact phrase. When the model abstains in other words, the answer is judged on content. On dev one such abstention was marked `correct` (Amcor gross margin) and 4 were marked `incorrect`; on held-out 2 were marked `incorrect`. This overstates `correct` by at least 1 point and understates `not_found` by a few.
-- The judge was too strict in two cases that break my own unit and rounding rules: Netflix 5,466,312 thousand against a gold of $5,466M, and Coca-Cola 0.0146 against a gold of 0.01. These push `correct` down.
-- Net effect on the accuracy figures is a few points, direction unknown. Plan: fix the abstention check and the unit and rounding rules at the start of Phase C, then re-judge the baseline once, so every row in the results table uses the same judge.
-- 5 dev and 3 held-out answers were correct without the gold page (`ok_without_gold_page`). From the judge's reasons on the dev ones, four seem to come from another page with the same figures (not yet checked by hand), and one was a judge error (above). I report accuracy as is and keep them as a separate label. Stricter accuracy (correct and gold page retrieved) is 27% on dev.
+- **Abstentions in other words (fixed).** `not_found` used to be detected by the exact phrase, so answers like "Therefore, it is not possible to determine..." were judged on content. On dev, 1 was marked `correct` (Amcor gross margin) and 4 `incorrect`; on held-out, 2 `incorrect`. `is_not_found` now also checks the last two sentences for conclusion phrases ("the answer is not found", "not possible to determine", "cannot be calculated"). It looks only at the end, so an answer that mentions a missing detail and then gives a number is not an abstention (tested on real answers). The saved verdicts were recomputed with `scripts/rescore_abstentions.py`, without calling the LLM again, so the judge prompt stayed frozen and the 10/10 unseen check still applies. The numbers above are the corrected ones. Before the fix: dev 32 / 36 / 32, held-out 30 / 38 / 32.
+- **Not changed, on purpose.** Editing the judge prompt would invalidate the unseen check and need a full re-judge. One miss is known: Coca-Cola 0.0146 against a gold of 0.01, which should be correct after rounding to the gold's precision. It costs at most 1 point. Netflix (5,466,312 against a gold of $5,466M in millions) I first thought was too strict. The question asks for millions and the answer gave the thousands figure with no conversion, so `incorrect` is right.
+- **Soft abstentions stay as they are.** One held-out answer (3M quick ratio) says the quick ratio "is not explicitly mentioned" and then talks about liquidity. It is judged on content, as `incorrect`.
+- 4 dev and 3 held-out answers were correct without the gold page (`ok_without_gold_page`). From the judge's reasons on the dev ones, they seem to come from another page with the same figures (not yet checked by hand). Stricter accuracy (correct and gold page retrieved) is 27% on dev.
 
 **What I learned**
 
@@ -151,7 +151,7 @@ When the gold page was retrieved, the answer was correct 47% of the time on dev 
 - A judge is a model too and needs its own check against human grades.
 - Page numbers come in four forms (see `docs/notes.md`). Only `page_index` is used for comparison.
 
-**Next:** Phase C (retrieval upgrades), one change at a time, starting with metadata filtering and a re-judge of the baseline with the fixed judge rules. The reranker (cross-encoder) targets the "answer chunk ranked last" cases.
+**Next:** Phase C (retrieval upgrades), one change at a time, starting with metadata filtering. The judge fixes are done, so the baseline above is the comparison point. The reranker (cross-encoder) targets the "answer chunk ranked last" cases.
 
 In my own words (fill in):
 

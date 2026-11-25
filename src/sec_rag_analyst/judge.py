@@ -80,13 +80,26 @@ def ask_judge(prompt: str, model: str = MODEL) -> dict:
 
 
 NOT_FOUND = re.compile(r"\bnot found\b", re.IGNORECASE)
+# Abstentions in other words. These are only looked for in the last two sentences, where the model states its conclusion.
+ABSTAIN_PHRASES = re.compile(
+    r"\bthe (answer|information|figure|value) (is|was) not found\b"
+    r"|\bnot possible to (determine|assess|calculate|answer|tell)\b"
+    r"|\b(cannot|can't|can not) be (determined|calculated|answered|assessed)\b"
+    r"|\bunable to (determine|calculate|answer|find)\b",
+    re.IGNORECASE,
+)
+PAGE_TAIL = re.compile(r"\s*\(\s*page[^)]*\)\s*\.?\s*$", re.IGNORECASE)
 
 
 def is_not_found(answer: str) -> bool:
-    """True if the model abstained. The generation prompt tells it to reply "not found", so this is a
-    plain text check and not a judgement. Long answers are skipped so an explanation that merely
-    contains the words is not mistaken for an abstention."""
-    return len(answer) < 200 and bool(NOT_FOUND.search(answer))
+    """True if the model abstained. The generation prompt tells it to reply "not found", so a short answer
+    containing those words counts. Longer answers often abstain in their own words after starting to explain
+    ("Therefore, it is not possible to determine..."), so their last two sentences are checked for such phrases.
+    Only the end is checked, so an answer that merely mentions a missing detail in the middle is not an abstention."""
+    if len(answer) < 200 and NOT_FOUND.search(answer):
+        return True
+    sentences = re.split(r"(?<=[.!?])\s+", PAGE_TAIL.sub("", answer.strip()))
+    return bool(ABSTAIN_PHRASES.search(" ".join(sentences[-2:])))
 
 
 def judge_answer(question: str, gold_answer: str, answer: str, chunks: list[dict]) -> dict:
