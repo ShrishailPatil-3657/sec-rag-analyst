@@ -49,6 +49,9 @@ In my own words:
 - **Hit rate (recall@k):** was the evidence page among the top k retrieved chunks? Measures *retrieval*.
 - **Accuracy:** did the final answer match the gold answer (allowing for rounding)? Measures *retrieval plus generation*.
 - If hit is yes and accuracy is no, the problem is reading or arithmetic. If hit is no, fix retrieval first.
+- **Faithfulness ("supported"):** do the pages the model was given actually contain what is needed to derive the gold answer (or the numbers to compute it)? Measures whether the answer rests on the document and not on a guess. It is separate from accuracy: a correct answer can be unsupported (a lucky guess, or a yes/no right by chance), and a wrong answer can be supported (the pages had it, the model misread it).
+- Baseline on the held-out set: hit 0.56, accuracy 30%, faithfulness 34%. All three are needed. Hit rate says retrieval found the page, accuracy says the answer matched, faithfulness says the answer came from the text.
+- **Page hit is not chunk hit.** Hit rate counts a question as a hit if any chunk from the gold *page* was retrieved. The chunk holding the number can still be missing, which is why many ratio questions fail even with a hit.
 
 In my own words:
 
@@ -90,10 +93,54 @@ In my own words:
 
 In my own words:
 
-## LLM judge and calibration (planned)
+## LLM judge and calibration
 
-- The **judge** is a second LLM call that grades the first: it sees the question, gold answer and model answer (and the retrieved chunks, for faithfulness).
-- **Calibration** does not train it. I grade about 12 answers by hand, the judge grades the same ones, and we measure agreement. Low agreement means fixing the judge prompt before trusting its numbers.
+- The **judge** is a second LLM call that grades the first. It sees the question, the gold answer, the model answer and the retrieved chunks. It returns a verdict (`correct`, `incorrect`, `not_found`) and a `supported` flag. Here it is the local qwen3:8b at temperature 0 (so the same input gives the same output). `not_found` is decided by code, not by the model, because abstaining is a fact about the answer text.
+- Why a judge at all: grading 150 answers by hand for every experiment is too slow, and exact string matching fails on rounding, units and wording.
+- **Calibration** does not train it. I grade some answers by hand, the judge grades the same ones, and we count agreement. Low agreement means the judge's numbers cannot be trusted.
+- **Tuned vs unseen:** I changed the judge prompt twice while looking at my first 12 hand grades, so its 12/12 and 10/12 agreement there is optimistic. The fair test is answers it was never tuned on. I graded 10 fresh dev answers with the verdicts hidden (4 judged correct, 4 incorrect, 2 not found) and it agreed on 10/10 for both scores. Ten is a small sample, so the honest claim is "no disagreements found".
+- **Freeze the judge** before the final measurement. If I keep editing it after seeing results, the numbers stop being comparable. Known judge errors are written down and fixed once, then the baseline is re-judged so every row in the results table uses the same judge.
+- Known judge errors so far: abstentions in other words than "not found" are judged by content (one marked correct), and two unit and rounding cases were judged too strictly.
+
+In my own words:
+
+## Failure types
+
+`scripts/report.py` gives each question one label, using the verdict and whether the gold page was retrieved:
+
+- **ok:** correct, and the gold page was retrieved.
+- **ok_without_gold_page:** correct, but the gold page was not retrieved. The answer came from another page (often the same figure appears twice), or it was a judge error. Check by hand before trusting it.
+- **retrieval_miss:** gold page not retrieved, and the answer was wrong or not found. When the answer is "not found" this is the system behaving well; the retrieval is what failed.
+- **abstained:** the gold page was retrieved, but the model said not found. The model could not use what it had.
+- **wrong_despite_retrieval:** the gold page was retrieved, and the answer is still wrong. Causes seen: the chunk with the needed number was not retrieved, wrong column or units, an incomplete answer.
+
+The labels point at what to fix: retrieval misses go to Phase C (filtering, hybrid search, reranking), wrong-despite-retrieval goes to chunking and prompting.
+
+In my own words:
+
+## Four kinds of page number
+
+All of them describe a page of a PDF, but they are not the same number.
+
+| Name | Where | Starts at |
+| --- | --- | --- |
+| `evidence_page_num` | FinanceBench gold evidence | 0 (position in the PDF file) |
+| `page_index` | our pages and chunks | 0 (same position, same meaning) |
+| `page_number` | our pages and chunks, and the labels the model sees | 1 (`page_index` + 1) |
+| printed page number | the footer on the page | whatever the filing prints |
+
+- Positions count every page of the file from the cover, including unnumbered front pages. The printed number is lower (Boeing by 2, AES by 3, Pfizer 2021 by 6 on one chunk checked, Adobe 2016 not at all).
+- Compare `page_index` with `evidence_page_num` only. To find a cited page in a PDF viewer, jump to that position in the page counter, not the footer number.
+
+In my own words:
+
+## Cross-encoder reranker
+
+- Today's search is a **bi-encoder**: the question and each chunk are turned into vectors separately, and search compares the vectors. Chunk vectors are computed once, so it is fast, but the model never reads the question and a chunk together.
+- A **cross-encoder** reads the question and one chunk together and outputs a single relevance score. It is more accurate and much slower, because nothing can be precomputed.
+- A **reranker** uses both: the fast search pulls a wider list of candidates (say the top 30), the cross-encoder rescores those, and the top 5 of the new order go to the LLM.
+- What it can fix: the answer chunk is retrieved but ranked low (seen in a hand-graded item where the answer chunk was ranked 5th of 5). What it cannot fix: a page that never made the candidate list, which needs wider candidates, metadata filtering or hybrid search.
+- Phase C will measure it as one change on its own, against this baseline.
 
 In my own words:
 
