@@ -162,7 +162,14 @@ In my own words (fill in):
 
 ### Phase C: Retrieval upgrades (days 6-12)
 
-*Not started.*
+*In progress.* Done: judge fixes (abstention detection). Search stays **inside the known filing** (the question's `doc_name` is given) so every technique is compared with the Phase B baseline on the same setup.
+
+Plan, one change at a time, each measured on dev then held-out:
+
+1. BM25 and hybrid search (dense + BM25, combined with RRF).
+2. Cross-encoder reranker (wider candidate list, rescored, top 5 kept).
+3. Table-aware chunking and a chunk-size sweep.
+4. **Last step: corpus-wide search.** Stop giving the filing: search all filings, then add metadata filtering (company, year, form type) and document routing. This is the realistic task, and the baseline numbers will drop. It is reported as new rows (baseline corpus-wide, then each fix), not as a change to the in-filing rows above.
 
 ### Phase D: Agent (days 13-19)
 

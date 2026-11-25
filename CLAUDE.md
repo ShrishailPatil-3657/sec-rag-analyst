@@ -49,7 +49,7 @@ The owner can spend 2 to 3+ hours a day, so the original 8-week guide ("SEC RAG 
 | --- | --- | --- | --- |
 | A. Baseline | 1-3 | Exploration, PDF to pages, chunks (about 1,000 chars, 200 overlap), local embeddings (BGE or e5 via sentence-transformers), top-5 retrieval, local LLM answer via Ollama (about 8B model) | Questions answered end to end with page numbers |
 | B. Eval harness | 4-5 | Fixed 20-question baseline, then a script that runs all 150 questions | Hit rate (recall@k), MRR, accuracy, faithfulness, LLM judge calibrated against hand grading. Do not tune on the 20 baseline questions. |
-| C. Retrieval upgrades | 6-12 | Metadata filtering (company, year, form type), BM25 + hybrid search (RRF), cross-encoder reranker, document routing, table-aware chunking and chunk-size sweep | Gain per component |
+| C. Retrieval upgrades | 6-12 | Judge fixes first (done). Then, searching inside the known filing: BM25 + hybrid search (RRF), cross-encoder reranker, table-aware chunking and chunk-size sweep. Last step: switch to corpus-wide search (no `doc_name` given) and add metadata filtering (company, year, form type) and document routing | Gain per component. Corpus-wide numbers will drop, so report them as a new row, not as a change to the in-filing rows |
 | D. Agent | 13-19 | LangGraph loop: query rewriting, decomposition, search tool, table lookup, calculator tool, abstain | Gain on multi-step and ratio questions |
 | E. Polish | 20-28 | Citation check, final run with a hosted model (Claude), Postgres with pgvector, Boston add-on, Streamlit or CLI demo, README and short write-up | Final results table, faithfulness, wrong-answer rate |
 
